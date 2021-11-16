@@ -1,9 +1,55 @@
+use std::{io, path::PathBuf, process::Command};
+
 pub trait SlnOperations {
     fn op();
 }
 
 trait MsBuildArg {
     fn get_arg(&self) -> &'static str;
+}
+
+pub type Sink = dyn Fn(&str);
+
+pub struct BuildEnv {
+    sln_path: PathBuf,
+    ops: BuildConfig,
+    sinks: Sinks,
+}
+
+pub struct Sinks {
+    out: Vec<Box<Sink>>,
+    err: Vec<Box<Sink>>,
+}
+
+impl Default for Sinks {
+    fn default() -> Self {
+        Self {
+            out: vec![],
+            err: vec![],
+        }
+    }
+}
+
+impl BuildEnv {
+    pub fn from_env(sln_path: PathBuf, ops: BuildConfig) -> Self {
+        BuildEnv {
+            sln_path,
+            ops,
+            sinks: Sinks::default(),
+        }
+    }
+
+    pub fn run(&self, operation: Operation) -> io::Result<()> {
+        Ok(())
+    }
+
+    pub fn add_stdout_sink(&mut self, sink: Box<Sink>) {
+        self.sinks.out.push(Box::new(sink));
+    }
+
+    pub fn add_stderr_sink(&mut self, sink: Box<Sink>) {
+        self.sinks.err.push(Box::new(sink));
+    }
 }
 
 pub enum Operation {
@@ -57,8 +103,7 @@ impl MsBuildArg for Platform {
     }
 }
 
-pub struct BuildOptions {
-    op: Operation,
-    config: Config,
-    plat: Platform,
+pub struct BuildConfig {
+    pub config: Config,
+    pub plat: Platform,
 }
