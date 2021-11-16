@@ -84,11 +84,17 @@ impl BuildEnv {
         Ok(())
     }
 
-    pub fn add_stdout_sink(&mut self, sink: Box<Sink>) {
+    pub fn add_stdout_sink<S>(&mut self, sink: S)
+    where
+        S: Fn(&str) + Send + 'static,
+    {
         self.sinks.lock().unwrap().out.push(Box::new(sink));
     }
 
-    pub fn add_stderr_sink(&mut self, sink: Box<Sink>) {
+    pub fn add_stderr_sink<S>(&mut self, sink: S)
+    where
+        S: Fn(&str) + Send + 'static,
+    {
         self.sinks.lock().unwrap().err.push(Box::new(sink));
     }
 
@@ -158,4 +164,18 @@ impl MsBuildArg for Platform {
 pub struct BuildConfig {
     pub config: Config,
     pub plat: Platform,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build() {
+        let mut builder = BuildEnv::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
+            config: Config::Debug, plat: Platform::x64
+        });
+        builder.add_stdout_sink(|l| println!("{}", l));
+        builder.run(Operation::Build).unwrap();
+    }
 }
