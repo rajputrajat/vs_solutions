@@ -1,19 +1,24 @@
-use std::{io, path::PathBuf, process::Command};
+use std::{
+    io::{self, prelude::*, BufReader},
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    thread,
+};
 
 pub trait SlnOperations {
     fn op();
 }
 
-trait MsBuildArg {
+pub trait MsBuildArg {
     fn get_arg(&self) -> &'static str;
 }
 
-pub type Sink = dyn Fn(&str);
+pub type Sink = dyn Fn(&str) + Send;
 
 pub struct BuildEnv {
-    sln_path: PathBuf,
-    ops: BuildConfig,
-    sinks: Sinks,
+    sln_path: String,
+    config: BuildConfig,
+    sinks: Arc<Mutex<Sinks>>,
 }
 
 pub struct Sinks {
@@ -31,24 +36,71 @@ impl Default for Sinks {
 }
 
 impl BuildEnv {
-    pub fn from_env(sln_path: PathBuf, ops: BuildConfig) -> Self {
+    pub fn from_env<P: Into<String>>(sln_path: P, config: BuildConfig) -> Self {
         BuildEnv {
-            sln_path,
-            ops,
-            sinks: Sinks::default(),
+            sln_path: sln_path.into(),
+            config,
+            sinks: Arc::new(Mutex::new(Sinks::default())),
         }
     }
 
     pub fn run(&self, operation: Operation) -> io::Result<()> {
+        let args = self.get_args(&operation);
+        let mut process = Command::new("msbuild")
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let handle_out = {
+            let pipe = process.stdout.take().unwrap();
+            let reader = BufReader::new(pipe);
+            let sinks = self.sinks.clone();
+            let handle = thread::spawn(move || {
+                reader.lines().filter_map(|l| l.ok()).for_each(|l| {
+                    let sinks = sinks.lock().unwrap();
+                    for sink in &sinks.out {
+                        (sink)(&l);
+                    }
+                });
+            });
+            handle
+        };
+        let handle_err = {
+            let pipe = process.stderr.take().unwrap();
+            let reader = BufReader::new(pipe);
+            let sinks = self.sinks.clone();
+            let handle = thread::spawn(move || {
+                reader.lines().filter_map(|l| l.ok()).for_each(|l| {
+                    let sinks = sinks.lock().unwrap();
+                    for sink in &sinks.err {
+                        (sink)(&l);
+                    }
+                });
+            });
+            handle
+        };
+        handle_out.join().unwrap();
+        handle_err.join().unwrap();
         Ok(())
     }
 
     pub fn add_stdout_sink(&mut self, sink: Box<Sink>) {
-        self.sinks.out.push(Box::new(sink));
+        self.sinks.lock().unwrap().out.push(Box::new(sink));
     }
 
     pub fn add_stderr_sink(&mut self, sink: Box<Sink>) {
-        self.sinks.err.push(Box::new(sink));
+        self.sinks.lock().unwrap().err.push(Box::new(sink));
+    }
+
+    fn get_args(&self, op: &Operation) -> Vec<String> {
+        vec![
+            self.sln_path.clone(),
+            "/t:restore".to_owned(),
+            "/p:RestorePackagesConfig=true".to_owned(),
+            op.get_arg().to_owned(),
+            self.config.config.get_arg().to_owned(),
+            self.config.plat.get_arg().to_owned(),
+        ]
     }
 }
 
