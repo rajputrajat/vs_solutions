@@ -1,3 +1,4 @@
+use log::info;
 use std::{
     io::{self, prelude::*, BufReader},
     process::{Command, Stdio},
@@ -46,6 +47,7 @@ impl BuildEnv {
 
     pub fn run(&self, operation: Operation) -> io::Result<()> {
         let args = self.get_args(&operation);
+        info!("command args: {:?}", args);
         let mut process = Command::new("msbuild")
             .args(args)
             .stdout(Stdio::piped())
@@ -172,6 +174,7 @@ mod tests {
 
     #[test]
     fn build() {
+        env_logger::init();
         let mut builder = BuildEnv::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
             config: Config::Debug, plat: Platform::x64
         });
