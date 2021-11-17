@@ -1,7 +1,7 @@
 use log::info;
 use std::{
     io::{self, prelude::*, BufReader},
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
     sync::{Arc, Mutex},
     thread,
 };
@@ -41,7 +41,7 @@ impl SlnOperations {
         }
     }
 
-    pub fn run(&self, operation: Operation) -> io::Result<()> {
+    pub fn run(&self, operation: Operation) -> io::Result<ExitStatus> {
         let args = self.get_args(&operation);
         info!("command args: {:?}", args);
         let mut process = Command::new("msbuild")
@@ -79,7 +79,9 @@ impl SlnOperations {
         };
         handle_out.join().unwrap();
         handle_err.join().unwrap();
-        Ok(())
+        let exit_status = process.wait()?;
+        info!("msbuild process exited with '{}' status", exit_status);
+        Ok(exit_status)
     }
 
     pub fn add_stdout_sink<S>(&mut self, sink: S)
