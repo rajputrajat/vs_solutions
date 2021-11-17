@@ -6,17 +6,13 @@ use std::{
     thread,
 };
 
-pub trait SlnOperations {
-    fn op();
-}
-
 pub trait MsBuildArg {
     fn get_arg(&self) -> &'static str;
 }
 
 pub type Sink = dyn Fn(&str) + Send;
 
-pub struct BuildEnv {
+pub struct SlnOperations {
     sln_path: String,
     config: BuildConfig,
     sinks: Arc<Mutex<Sinks>>,
@@ -36,9 +32,9 @@ impl Default for Sinks {
     }
 }
 
-impl BuildEnv {
+impl SlnOperations {
     pub fn from_env<P: Into<String>>(sln_path: P, config: BuildConfig) -> Self {
-        BuildEnv {
+        Self {
             sln_path: sln_path.into(),
             config,
             sinks: Arc::new(Mutex::new(Sinks::default())),
@@ -98,6 +94,15 @@ impl BuildEnv {
         S: Fn(&str) + Send + 'static,
     {
         self.sinks.lock().unwrap().err.push(Box::new(sink));
+    }
+
+    pub fn open_devenv(&self) -> io::Result<()> {
+        let status = Command::new("devenv").arg(&self.sln_path).status()?;
+        info!(
+            "opening devenv for sln: {}, status: {}",
+            self.sln_path, status
+        );
+        Ok(())
     }
 
     fn get_args(&self, op: &Operation) -> Vec<String> {
@@ -174,11 +179,20 @@ mod tests {
 
     #[test]
     fn build() {
-        env_logger::init();
-        let mut builder = BuildEnv::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
-            config: Config::Debug, plat: Platform::x64
+        let _ = env_logger::try_init();
+        let mut builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
+            config: Config::Release, plat: Platform::x64
         });
         builder.add_stdout_sink(|l| println!("{}", l));
         builder.run(Operation::Build).unwrap();
+    }
+
+    #[test]
+    fn open() {
+        let _ = env_logger::try_init();
+        let builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
+            config: Config::Release, plat: Platform::x64
+        });
+        builder.open_devenv().unwrap();
     }
 }
