@@ -2,7 +2,10 @@ use log::info;
 use std::{
     io::{self, prelude::*, BufReader},
     process::{Command, ExitStatus, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
 };
 
@@ -16,6 +19,7 @@ pub struct SlnOperations {
     sln_path: String,
     config: BuildConfig,
     sinks: Arc<Mutex<Sinks>>,
+    kill: Arc<Mutex<bool>>,
 }
 
 pub struct Sinks {
@@ -38,10 +42,11 @@ impl SlnOperations {
             sln_path: sln_path.into(),
             config,
             sinks: Arc::new(Mutex::new(Sinks::default())),
+            kill: Arc::new(Mutex::new(false)),
         }
     }
 
-    pub fn run(&self, operation: Operation) -> io::Result<ExitStatus> {
+    pub fn build(&self, operation: Operation) -> io::Result<ExitStatus> {
         let args = self.get_args(&operation);
         info!("command args: {:?}", args);
         let mut process = Command::new("msbuild")
@@ -77,11 +82,23 @@ impl SlnOperations {
             });
             handle
         };
+        let kill_checker = self.kill.clone();
+        let handle_killer = thread::spawn(move || -> io::Result<()> {
+            if *kill_checker.lock().unwrap() {
+                &process.kill()?;
+            }
+            Ok(())
+        });
         handle_out.join().unwrap();
         handle_err.join().unwrap();
         let exit_status = process.wait()?;
         info!("msbuild process exited with '{}' status", exit_status);
         Ok(exit_status)
+    }
+
+    pub fn stop_build(&mut self) {
+        let kill_flag = self.kill.lock().unwrap();
+        *kill_flag = true;
     }
 
     pub fn add_stdout_sink<S>(&mut self, sink: S)
@@ -186,7 +203,7 @@ mod tests {
             config: Config::Release, plat: Platform::x64
         });
         builder.add_stdout_sink(|l| println!("{}", l));
-        builder.run(Operation::Build).unwrap();
+        builder.build(Operation::Build).unwrap();
     }
 
     #[test]
