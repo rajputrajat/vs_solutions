@@ -60,7 +60,7 @@ impl SlnOperations {
             let mut p_inner = p.lock().unwrap();
             let pipe = p_inner.stdout.take().unwrap();
             let reader = BufReader::new(pipe);
-            let sinks = self.sinks.clone();
+            let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
                     let sinks = sinks.lock().unwrap();
@@ -75,7 +75,7 @@ impl SlnOperations {
             let mut p_inner = p.lock().unwrap();
             let pipe = p_inner.stderr.take().unwrap();
             let reader = BufReader::new(pipe);
-            let sinks = self.sinks.clone();
+            let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
                     let sinks = sinks.lock().unwrap();
@@ -86,7 +86,7 @@ impl SlnOperations {
             })
         };
         let handle_killer = {
-            let kill_checker = self.kill.clone();
+            let kill_checker = Arc::clone(&self.kill);
             let p = Arc::clone(&process);
             thread::spawn(move || -> io::Result<()> {
                 let mut p_inner = p.lock().unwrap();
