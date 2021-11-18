@@ -7,6 +7,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
+    time::Duration,
 };
 
 pub trait MsBuildArg {
@@ -91,8 +92,13 @@ impl SlnOperations {
             thread::spawn(move || -> io::Result<()> {
                 let mut p_inner = p.lock().unwrap();
                 loop {
-                    if kill_checker.load(Ordering::Relaxed) {
-                        let _ = &p_inner.kill()?;
+                    thread::sleep(Duration::from_millis(200));
+                    if p_inner.try_wait()?.is_none() {
+                        if kill_checker.load(Ordering::Relaxed) {
+                            let _ = &p_inner.kill()?;
+                            break;
+                        }
+                    } else {
                         break;
                     }
                 }
