@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use log::info;
 use std::{
     io::{self, prelude::*, BufReader},
