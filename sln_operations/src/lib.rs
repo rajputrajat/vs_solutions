@@ -59,13 +59,16 @@ impl SlnOperations {
     pub fn build(&self, operation: Operation) -> io::Result<ExitStatus> {
         let args = self.get_args(&operation);
         info!("command args: {:?}", args);
-        let mut process = Command::new("msbuild")
+        let process = Command::new("msbuild")
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
+        let process = Arc::new(Mutex::new(process));
         let handle_out = {
-            let pipe = process.stdout.take().unwrap();
+            let p = Arc::clone(&process);
+            let mut p_inner = p.lock().unwrap();
+            let pipe = p_inner.stdout.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = self.sinks.clone();
             let handle = thread::spawn(move || {
@@ -79,7 +82,9 @@ impl SlnOperations {
             handle
         };
         let handle_err = {
-            let pipe = process.stderr.take().unwrap();
+            let p = Arc::clone(&process);
+            let mut p_inner = p.lock().unwrap();
+            let pipe = p_inner.stderr.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = self.sinks.clone();
             let handle = thread::spawn(move || {
@@ -92,22 +97,30 @@ impl SlnOperations {
             });
             handle
         };
-        let kill_checker = self.kill.clone();
-        let handle_killer = thread::spawn(move || -> io::Result<()> {
-            if *kill_checker.lock().unwrap() {
-                &process.kill()?;
-            }
-            Ok(())
-        });
+        let handle_killer = {
+            let kill_checker = self.kill.clone();
+            let p = Arc::clone(&process);
+            thread::spawn(move || -> io::Result<()> {
+                let mut p_inner = p.lock().unwrap();
+                loop {
+                    if *kill_checker.lock().unwrap() {
+                        &p_inner.kill()?;
+                        break;
+                    }
+                }
+                Ok(())
+            })
+        };
+        handle_killer.join().unwrap();
         handle_out.join().unwrap();
         handle_err.join().unwrap();
-        let exit_status = process.wait()?;
+        let exit_status = process.lock().unwrap().wait()?;
         info!("msbuild process exited with '{}' status", exit_status);
         Ok(exit_status)
     }
 
     pub fn stop_build(&mut self) {
-        let kill_flag = self.kill.lock().unwrap();
+        let mut kill_flag = self.kill.lock().unwrap();
         *kill_flag = true;
     }
 
