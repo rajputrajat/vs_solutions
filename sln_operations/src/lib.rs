@@ -2,7 +2,10 @@ use log::info;
 use std::{
     io::{self, prelude::*, BufReader},
     process::{Command, ExitStatus, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
 };
 
@@ -16,7 +19,7 @@ pub struct SlnOperations {
     sln_path: String,
     config: BuildConfig,
     sinks: Arc<Mutex<Sinks>>,
-    kill: Arc<Mutex<bool>>,
+    kill: Arc<AtomicBool>,
 }
 
 pub struct Sinks {
@@ -39,7 +42,7 @@ impl SlnOperations {
             sln_path: sln_path.into(),
             config,
             sinks: Arc::new(Mutex::new(Sinks::default())),
-            kill: Arc::new(Mutex::new(false)),
+            kill: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -58,15 +61,14 @@ impl SlnOperations {
             let pipe = p_inner.stdout.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = self.sinks.clone();
-            let handle = thread::spawn(move || {
+            thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
                     let sinks = sinks.lock().unwrap();
                     for sink in &sinks.out {
                         (sink)(&l);
                     }
                 });
-            });
-            handle
+            })
         };
         let handle_err = {
             let p = Arc::clone(&process);
@@ -74,15 +76,14 @@ impl SlnOperations {
             let pipe = p_inner.stderr.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = self.sinks.clone();
-            let handle = thread::spawn(move || {
+            thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
                     let sinks = sinks.lock().unwrap();
                     for sink in &sinks.err {
                         (sink)(&l);
                     }
                 });
-            });
-            handle
+            })
         };
         let handle_killer = {
             let kill_checker = self.kill.clone();
@@ -90,15 +91,15 @@ impl SlnOperations {
             thread::spawn(move || -> io::Result<()> {
                 let mut p_inner = p.lock().unwrap();
                 loop {
-                    if *kill_checker.lock().unwrap() {
-                        &p_inner.kill()?;
+                    if kill_checker.load(Ordering::Relaxed) {
+                        let _ = &p_inner.kill()?;
                         break;
                     }
                 }
                 Ok(())
             })
         };
-        handle_killer.join().unwrap();
+        handle_killer.join().unwrap()?;
         handle_out.join().unwrap();
         handle_err.join().unwrap();
         let exit_status = process.lock().unwrap().wait()?;
@@ -107,8 +108,7 @@ impl SlnOperations {
     }
 
     pub fn stop_build(&mut self) {
-        let mut kill_flag = self.kill.lock().unwrap();
-        *kill_flag = true;
+        self.kill.store(true, Ordering::Relaxed);
     }
 
     pub fn add_stdout_sink<S>(&mut self, sink: S)
@@ -154,10 +154,10 @@ pub enum Operation {
 
 impl MsBuildArg for Operation {
     fn get_arg(&self) -> &'static str {
-        match self {
-            &Operation::Build => "/t:Build",
-            &Operation::Clean => "/t:Clean",
-            &Operation::Rebuild => "/t:Rebuild",
+        match *self {
+            Operation::Build => "/t:Build",
+            Operation::Clean => "/t:Clean",
+            Operation::Rebuild => "/t:Rebuild",
         }
     }
 }
@@ -169,9 +169,9 @@ pub enum Config {
 
 impl MsBuildArg for Config {
     fn get_arg(&self) -> &'static str {
-        match self {
-            &Config::Debug => "/p:Configuration=Debug",
-            &Config::Release => "/p:Configuration=Release",
+        match *self {
+            Config::Debug => "/p:Configuration=Debug",
+            Config::Release => "/p:Configuration=Release",
         }
     }
 }
@@ -187,12 +187,12 @@ pub enum Platform {
 
 impl MsBuildArg for Platform {
     fn get_arg(&self) -> &'static str {
-        match self {
-            &Platform::Any => "/p:Platform=Any",
-            &Platform::Win32 => "/p:Platform=Win32",
-            &Platform::Win64 => "/p:Platform=Win64",
-            &Platform::x86 => "/p:Platform=x86",
-            &Platform::x64 => "/p:Platform=x64",
+        match *self {
+            Platform::Any => "/p:Platform=Any",
+            Platform::Win32 => "/p:Platform=Win32",
+            Platform::Win64 => "/p:Platform=Win64",
+            Platform::x86 => "/p:Platform=x86",
+            Platform::x64 => "/p:Platform=x64",
         }
     }
 }
