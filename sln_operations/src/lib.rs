@@ -250,7 +250,7 @@ mod tests {
         let timer_hndl = {
             let builder = Arc::clone(&builder);
             thread::spawn(move || {
-                thread::sleep(Duration::from_secs(3));
+                thread::sleep(Duration::from_secs(1));
                 let mut builder_inner = builder.lock().unwrap();
                 builder_inner.stop_build();
             })
