@@ -1,5 +1,10 @@
 #![warn(
     clippy::all,
+    clippy::correctness,
+    clippy::suspicious,
+    clippy::style,
+    clippy::complexity,
+    clippy::perf,
     clippy::restriction,
     clippy::pedantic,
     clippy::nursery,
