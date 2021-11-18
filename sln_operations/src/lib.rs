@@ -115,6 +115,7 @@ impl SlnOperations {
     }
 
     pub fn stop_build(&mut self) {
+        info!("process killing requested!");
         self.kill.store(true, Ordering::Relaxed);
     }
 
