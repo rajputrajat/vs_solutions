@@ -242,10 +242,20 @@ mod tests {
         let builder = Arc::new(Mutex::new(builder));
         let build_hndl = {
             let builder = Arc::clone(&builder);
-            let builder_inner = builder.lock().unwrap();
             thread::spawn(move || {
+                let builder_inner = builder.lock().unwrap();
                 builder_inner.build(Operation::Build).unwrap();
             })
         };
+        let timer_hndl = {
+            let builder = Arc::clone(&builder);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(3));
+                let mut builder_inner = builder.lock().unwrap();
+                builder_inner.stop_build();
+            })
+        };
+        timer_hndl.join().unwrap();
+        build_hndl.join().unwrap();
     }
 }
