@@ -95,6 +95,7 @@ impl SlnOperations {
                     thread::sleep(Duration::from_millis(200));
                     if p_inner.try_wait()?.is_none() {
                         if kill_checker.load(Ordering::Relaxed) {
+                            info!("process killed by client");
                             let _ = &p_inner.kill()?;
                             break;
                         }
@@ -229,5 +230,22 @@ mod tests {
             config: Config::Release, plat: Platform::x64
         });
         builder.open_devenv().unwrap();
+    }
+
+    #[test]
+    fn kill() {
+        let _ = env_logger::try_init();
+        let mut builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
+            config: Config::Release, plat: Platform::x64
+        });
+        builder.add_stdout_sink(|l| println!("{}", l));
+        let builder = Arc::new(Mutex::new(builder));
+        let build_hndl = {
+            let builder = Arc::clone(&builder);
+            let builder_inner = builder.lock().unwrap();
+            thread::spawn(move || {
+                builder_inner.build(Operation::Build).unwrap();
+            })
+        };
     }
 }
