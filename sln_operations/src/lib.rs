@@ -58,8 +58,7 @@ impl SlnOperations {
         let process = Arc::new(Mutex::new(process));
         let handle_out = {
             let p = Arc::clone(&process);
-            let mut p_inner = p.lock().unwrap();
-            let pipe = p_inner.stdout.take().unwrap();
+            let pipe = p.lock().unwrap().stdout.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
@@ -73,8 +72,7 @@ impl SlnOperations {
         };
         let handle_err = {
             let p = Arc::clone(&process);
-            let mut p_inner = p.lock().unwrap();
-            let pipe = p_inner.stderr.take().unwrap();
+            let pipe = p.lock().unwrap().stderr.take().unwrap();
             let reader = BufReader::new(pipe);
             let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
@@ -90,8 +88,9 @@ impl SlnOperations {
             let kill_checker = Arc::clone(&self.kill);
             let p = Arc::clone(&process);
             thread::spawn(move || -> io::Result<()> {
-                let mut p_inner = p.lock().unwrap();
                 loop {
+                    info!("checking");
+                    let mut p_inner = p.lock().unwrap();
                     thread::sleep(Duration::from_millis(200));
                     if p_inner.try_wait()?.is_none() {
                         if kill_checker.load(Ordering::Relaxed) {
@@ -244,16 +243,14 @@ mod tests {
         let build_hndl = {
             let builder = Arc::clone(&builder);
             thread::spawn(move || {
-                let builder_inner = builder.lock().unwrap();
-                builder_inner.build(Operation::Build).unwrap();
+                builder.lock().unwrap().build(Operation::Build).unwrap();
             })
         };
         let timer_hndl = {
             let builder = Arc::clone(&builder);
             thread::spawn(move || {
                 thread::sleep(Duration::from_secs(1));
-                let mut builder_inner = builder.lock().unwrap();
-                builder_inner.stop_build();
+                builder.lock().unwrap().stop_build();
             })
         };
         timer_hndl.join().unwrap();
