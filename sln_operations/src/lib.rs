@@ -96,7 +96,6 @@ impl SlnOperations {
             let p = Arc::clone(&process);
             thread::spawn(move || -> io::Result<()> {
                 loop {
-                    info!("checking");
                     let mut p_inner = p.lock().unwrap();
                     if int.recv().unwrap().0 && p_inner.try_wait()?.is_none() {
                         info!("process killed by client");
@@ -258,7 +257,7 @@ mod tests {
                 Ok(())
             })
         };
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(1));
         tx.send(Interrupt(true)).unwrap();
         let _ = build_hndl.join().unwrap();
         Ok(())
