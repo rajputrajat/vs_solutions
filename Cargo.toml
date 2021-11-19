@@ -1,2 +1,2 @@
 [workspace]
-members = ["find_slns", "sln_operations", "ui"]
+members = ["find_slns", "sln_operations", "ui", "ui_adapter"]
