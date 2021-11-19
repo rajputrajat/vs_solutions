@@ -3,11 +3,10 @@ use std::{
     io::{self, prelude::*, BufReader},
     process::{Command, ExitStatus, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
     },
     thread,
-    time::Duration,
 };
 
 pub trait MsBuildArg {
@@ -16,11 +15,13 @@ pub trait MsBuildArg {
 
 pub type Sink = dyn Fn(&str) + Send;
 
+pub struct Interrupt(bool);
+
 pub struct SlnOperations {
     sln_path: String,
     config: BuildConfig,
     sinks: Arc<Mutex<Sinks>>,
-    kill: Arc<AtomicBool>,
+    int_recv: Option<Receiver<Interrupt>>,
 }
 
 pub struct Sinks {
@@ -43,11 +44,17 @@ impl SlnOperations {
             sln_path: sln_path.into(),
             config,
             sinks: Arc::new(Mutex::new(Sinks::default())),
-            kill: Arc::new(AtomicBool::new(false)),
+            int_recv: None,
         }
     }
 
-    pub fn build(&self, operation: Operation) -> io::Result<ExitStatus> {
+    pub fn interrupter(&mut self) -> Sender<Interrupt> {
+        let (tx, rx): (Sender<Interrupt>, Receiver<Interrupt>) = channel();
+        self.int_recv = Some(rx);
+        tx
+    }
+
+    pub fn build(&mut self, operation: Operation) -> io::Result<ExitStatus> {
         let args = self.get_args(&operation);
         info!("command args: {:?}", args);
         let process = Command::new("msbuild")
@@ -85,20 +92,15 @@ impl SlnOperations {
             })
         };
         let handle_killer = {
-            let kill_checker = Arc::clone(&self.kill);
+            let int = self.int_recv.take().unwrap();
             let p = Arc::clone(&process);
             thread::spawn(move || -> io::Result<()> {
                 loop {
                     info!("checking");
                     let mut p_inner = p.lock().unwrap();
-                    thread::sleep(Duration::from_millis(200));
-                    if p_inner.try_wait()?.is_none() {
-                        if kill_checker.load(Ordering::Relaxed) {
-                            info!("process killed by client");
-                            let _ = &p_inner.kill()?;
-                            break;
-                        }
-                    } else {
+                    if int.recv().unwrap().0 && p_inner.try_wait()?.is_none() {
+                        info!("process killed by client");
+                        let _ = &p_inner.kill()?;
                         break;
                     }
                 }
@@ -111,11 +113,6 @@ impl SlnOperations {
         let exit_status = process.lock().unwrap().wait()?;
         info!("msbuild process exited with '{}' status", exit_status);
         Ok(exit_status)
-    }
-
-    pub fn stop_build(&mut self) {
-        info!("process killing requested!");
-        self.kill.store(true, Ordering::Relaxed);
     }
 
     pub fn add_stdout_sink<S>(&mut self, sink: S)
@@ -212,48 +209,60 @@ pub struct BuildConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
-    fn build() {
+    fn build() -> io::Result<()> {
         let _ = env_logger::try_init();
-        let mut builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
-            config: Config::Release, plat: Platform::x64
-        });
+        let mut builder = SlnOperations::from_env(
+            SLN,
+            BuildConfig {
+                config: Config::Release,
+                plat: Platform::x64,
+            },
+        );
         builder.add_stdout_sink(|l| println!("{}", l));
-        builder.build(Operation::Build).unwrap();
+        builder.build(Operation::Build)?;
+        Ok(())
     }
 
     #[test]
-    fn open() {
+    fn open() -> io::Result<()> {
         let _ = env_logger::try_init();
-        let builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
-            config: Config::Release, plat: Platform::x64
-        });
-        builder.open_devenv().unwrap();
+        let builder = SlnOperations::from_env(
+            SLN,
+            BuildConfig {
+                config: Config::Release,
+                plat: Platform::x64,
+            },
+        );
+        builder.open_devenv()?;
+        Ok(())
     }
 
     #[test]
-    fn kill() {
+    fn kill() -> io::Result<()> {
         let _ = env_logger::try_init();
-        let mut builder = SlnOperations::from_env("C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", BuildConfig {
-            config: Config::Release, plat: Platform::x64
-        });
+        let mut builder = SlnOperations::from_env(
+            SLN,
+            BuildConfig {
+                config: Config::Release,
+                plat: Platform::x64,
+            },
+        );
         builder.add_stdout_sink(|l| println!("{}", l));
-        let builder = Arc::new(Mutex::new(builder));
+        let tx = builder.interrupter();
         let build_hndl = {
-            let builder = Arc::clone(&builder);
-            thread::spawn(move || {
-                builder.lock().unwrap().build(Operation::Build).unwrap();
+            thread::spawn(move || -> io::Result<()> {
+                builder.build(Operation::Build)?;
+                Ok(())
             })
         };
-        let timer_hndl = {
-            let builder = Arc::clone(&builder);
-            thread::spawn(move || {
-                thread::sleep(Duration::from_secs(1));
-                builder.lock().unwrap().stop_build();
-            })
-        };
-        timer_hndl.join().unwrap();
-        build_hndl.join().unwrap();
+        thread::sleep(Duration::from_secs(3));
+        tx.send(Interrupt(true)).unwrap();
+        let _ = build_hndl.join().unwrap();
+        Ok(())
     }
+
+    const SLN: &str = "C:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln";
 }
