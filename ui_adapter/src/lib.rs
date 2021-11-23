@@ -22,8 +22,10 @@ impl BuildAdapter {
     }
 
     pub fn build(&mut self, log: Arc<Mutex<Vec<String>>>) -> io::Result<()> {
-        self.sln_ops
-            .add_stdout_sink(move |s| log.lock().unwrap().push(s.to_owned()));
+        self.sln_ops.add_stdout_sink(move |s| {
+            //println!("{}", s);
+            log.lock().unwrap().push(s.to_owned());
+        });
         self.sln_ops.build(Operation::Build)?;
         Ok(())
     }

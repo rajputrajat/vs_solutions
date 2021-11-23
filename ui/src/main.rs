@@ -25,7 +25,7 @@ fn main() -> Result<(), PlatformError> {
 fn show_build_log(log: Log) -> impl Widget<()> {
     let mut label = Label::dynamic(move |_, _| {
         let lock = log.lock().unwrap();
-        lock.iter().map(|s| s.to_owned()).collect()
+        dbg!(lock.iter().map(|s| s.to_owned()).collect())
     });
     label.set_font(FontDescriptor {
         family: FontFamily::MONOSPACE,
