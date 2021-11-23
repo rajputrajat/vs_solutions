@@ -1313,11 +1313,15 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "druid",
+ "ui_adapter",
 ]
 
 [[package]]
 name = "ui_adapter"
 version = "0.1.0"
+dependencies = [
+ "sln_operations",
+]
 
 [[package]]
 name = "unic-bidi"

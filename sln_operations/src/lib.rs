@@ -91,22 +91,24 @@ impl SlnOperations {
                 });
             })
         };
-        let handle_killer = {
-            let int = self.int_recv.take().unwrap();
-            let p = Arc::clone(&process);
-            thread::spawn(move || -> io::Result<()> {
-                loop {
-                    let mut p_inner = p.lock().unwrap();
-                    if int.recv().unwrap().0 && p_inner.try_wait()?.is_none() {
-                        info!("process killed by client");
-                        let _ = &p_inner.kill()?;
-                        break;
+        if self.int_recv.is_some() {
+            let handle_killer = {
+                let int = self.int_recv.take().unwrap();
+                let p = Arc::clone(&process);
+                thread::spawn(move || -> io::Result<()> {
+                    loop {
+                        let mut p_inner = p.lock().unwrap();
+                        if int.recv().unwrap().0 && p_inner.try_wait()?.is_none() {
+                            info!("process killed by client");
+                            let _ = &p_inner.kill()?;
+                            break;
+                        }
                     }
-                }
-                Ok(())
-            })
-        };
-        handle_killer.join().unwrap()?;
+                    Ok(())
+                })
+            };
+            handle_killer.join().unwrap()?;
+        }
         handle_out.join().unwrap();
         handle_err.join().unwrap();
         let exit_status = process.lock().unwrap().wait()?;
