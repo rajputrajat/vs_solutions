@@ -1,6 +1,6 @@
 use druid::{
-    widget::Label, AppLauncher, FontDescriptor, FontFamily, FontStyle, FontWeight, PlatformError,
-    Widget, WindowDesc,
+    widget::Label, AppLauncher, Data, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
+    PlatformError, Widget, WindowDesc,
 };
 use std::{
     sync::{Arc, Mutex},
@@ -20,6 +20,15 @@ fn main() -> Result<(), PlatformError> {
     AppLauncher::with_window(WindowDesc::new(show_build_log(log))).launch(())?;
     handle.join().unwrap();
     Ok(())
+}
+
+#[derive(Clone, Data, Lens)]
+struct BuildLog {
+    log: Arc<Vec<String>>,
+}
+
+impl BuildLog {
+    fn read_latest() {}
 }
 
 fn show_build_log(log: Log) -> impl Widget<()> {
