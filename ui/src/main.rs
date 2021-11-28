@@ -2,21 +2,29 @@ use druid::{
     widget::Label, AppLauncher, Data, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
     PlatformError, Selector, Target, Widget, WindowDesc,
 };
-use std::sync::{Arc, Mutex};
-use ui_adapter::BuildAdapter;
+use std::sync::Arc;
+use ui_adapter::{BuildAdapter, ErrorUiAdapter};
 
-type Log = Arc<Mutex<Vec<String>>>;
-
-fn main() -> Result<(), PlatformError> {
+fn main() -> Result<(), ErrorUi> {
     let app_launcher = AppLauncher::with_window(WindowDesc::new(show_build_log()));
     let ctx = app_launcher.get_external_handle();
-    let handle = {
-        let mut builder = BuildAdapter::new("c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", move |s| {
-            let _res = ctx.submit_command(Selector::new("send logs"), s.to_owned(), Target::Auto);
+    let mut builder = BuildAdapter::new("c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", move |s| {
+            let log = BuildLog {
+                log: Arc::new(vec![s.to_owned()])
+            };
+            let _res = ctx.submit_command(Selector::new("send logs"), log, Target::Auto);
         });
-    };
-    app_launcher.launch(BuildLog::default())?;
+    app_launcher
+        .launch(BuildLog::default())
+        .map_err(ErrorUi::Platform)?;
+    builder.build().map_err(ErrorUi::Other)?;
     Ok(())
+}
+
+#[derive(Debug)]
+enum ErrorUi {
+    Platform(PlatformError),
+    Other(ErrorUiAdapter),
 }
 
 #[derive(Clone, Data, Lens)]

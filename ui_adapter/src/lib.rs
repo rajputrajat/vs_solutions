@@ -32,11 +32,12 @@ impl BuildAdapter {
         );
         self.sln_ops
             .build(Operation::Build)
-            .map_err(|e| ErrorUiAdapter::Io(e))?;
+            .map_err(ErrorUiAdapter::Io)?;
         Ok(())
     }
 }
 
+#[derive(Debug)]
 pub enum ErrorUiAdapter {
     Io(io::Error),
     Other(String),
