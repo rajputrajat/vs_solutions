@@ -1,19 +1,23 @@
 use druid::{
-    widget::Label, AppLauncher, Data, ExtEventSink, FontDescriptor, FontFamily, FontStyle,
-    FontWeight, Lens, PlatformError, Selector, Target, Widget, WindowDesc,
+    widget::{Button, Controller, Flex, Label},
+    AppLauncher, Data, Event, ExtEventSink, FontDescriptor, FontFamily, FontStyle, FontWeight,
+    Lens, PlatformError, Selector, Target, Widget, WidgetExt, WidgetId, WindowDesc,
 };
 use log::{debug, info};
-use std::{sync::Arc, thread};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 use ui_adapter::{BuildAdapter, ErrorUiAdapter};
 
 fn main() -> Result<(), ErrorUi> {
     env_logger::init();
     let app_launcher = {
-        let window = WindowDesc::new(show_build_log());
+        let window = WindowDesc::new(build_ui());
         AppLauncher::with_window(window).log_to_console()
     };
     let ctx = app_launcher.get_external_handle();
-    build(ctx).map_err(ErrorUi::UiAdapter)?;
+    // build(ctx).map_err(ErrorUi::UiAdapter)?;
     app_launcher
         .launch(BuildLog::default())
         .map_err(ErrorUi::Platform)?;
@@ -27,20 +31,29 @@ enum ErrorUi {
     Other(String),
 }
 
-#[derive(Clone, Data, Lens)]
+#[derive(Clone, Data, Lens, Default)]
 struct BuildLog {
-    log: Arc<Vec<String>>,
+    log: Arc<Mutex<String>>,
 }
 
-impl Default for BuildLog {
-    fn default() -> Self {
-        Self {
-            log: Arc::new(vec![]),
-        }
-    }
-}
+const ID_ONE: WidgetId = WidgetId::reserved(1);
+const SHOW_LOG: Selector = Selector::new("show_log");
 
-fn show_build_log() -> impl Widget<BuildLog> {
+fn build_ui() -> impl Widget<BuildLog> {
+    Flex::column()
+        .with_child(
+            Button::new("Build")
+                .padding(2.0)
+                .on_click(|ctx, _data, _env| ctx.submit_command(SHOW_LOG)),
+        )
+        .with_child(
+            Label::dynamic(|data, _| format!("b: {}", data.lock().unwrap()))
+                .controller(BuildLogController)
+                .with_id(ID_ONE)
+                .lens(BuildLog::log)
+                .padding(2.0),
+        );
+
     let mut label = Label::new("hi");
     label.set_font(FontDescriptor {
         family: FontFamily::MONOSPACE,
@@ -51,22 +64,37 @@ fn show_build_log() -> impl Widget<BuildLog> {
     label
 }
 
-fn build(ctx: ExtEventSink) -> Result<(), ErrorUiAdapter> {
-    let _handle = {
-        thread::spawn(|| -> Result<(), ErrorUiAdapter> {
-            let mut builder = BuildAdapter::new(
+struct BuildLogController;
+
+impl Controller<Arc<Mutex<String>>, Label<Arc<Mutex<String>>>> for BuildLogController {
+    fn event(
+        &mut self,
+        child: &mut Label<Arc<Mutex<String>>>,
+        ctx: &mut druid::EventCtx,
+        event: &druid::Event,
+        data: &mut Arc<Mutex<String>>,
+        env: &druid::Env,
+    ) {
+        match event {
+            Event::Command(cmd) if cmd.is(SHOW_LOG) => {}
+            _ => child.event(ctx, event, data, env),
+        }
+    }
+}
+
+impl BuildLog {
+    fn build(&mut self) -> Result<(), ErrorUiAdapter> {
+        let _handle = {
+            let l = Arc::clone(&self.log);
+            thread::spawn(|| -> Result<(), ErrorUiAdapter> {
+                let mut builder = BuildAdapter::new(
                 "c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln",
-                move |s| {
-                    debug!("c: {}", s);
-                    let _res = ctx.submit_command(
-                        Selector::new("send logs"),
-                        BuildLog {log: Arc::new(vec![s.to_owned()])},
-                        Target::Auto);
-            });
-            info!("will call blocking 'build'");
-            builder.build()?;
-            Ok(())
-        })
-    };
-    Ok(())
+                move |s| { debug!("c: {}", s); l.lock().unwrap().push_str(s); });
+                info!("will call blocking 'build'");
+                builder.build()?;
+                Ok(())
+            })
+        };
+        Ok(())
+    }
 }
