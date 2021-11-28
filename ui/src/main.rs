@@ -29,10 +29,16 @@ enum ErrorUi {
     // Other(String),
 }
 
-#[derive(Clone, Data, Lens, Default)]
+#[derive(Clone, Lens, Default)]
 struct BuildLog {
     log: Arc<Mutex<String>>,
     build_started: bool,
+}
+
+impl Data for BuildLog {
+    fn same(&self, _other: &Self) -> bool {
+        false
+    }
 }
 
 const ID_ONE: WidgetId = WidgetId::reserved(1);
@@ -75,8 +81,7 @@ impl Controller<BuildLog, Label<BuildLog>> for BuildLogController {
     ) {
         match event {
             Event::Command(cmd) if cmd.is(SHOW_LOG) => {
-                if data.build_started {
-                } else {
+                if !data.build_started {
                     data.build_started = true;
                     let _res = data.build();
                 }
