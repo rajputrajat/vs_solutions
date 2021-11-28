@@ -59,6 +59,7 @@ fn build_ui() -> impl Widget<BuildLog> {
             .controller(BuildLogController)
             .with_id(ID_ONE)
             .padding(2.0)
+            .scroll()
     };
     Flex::column()
         .with_child(
