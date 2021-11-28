@@ -1313,6 +1313,8 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "druid",
+ "env_logger",
+ "log",
  "ui_adapter",
 ]
 
@@ -1320,6 +1322,7 @@ dependencies = [
 name = "ui_adapter"
 version = "0.1.0"
 dependencies = [
+ "log",
  "sln_operations",
 ]
 

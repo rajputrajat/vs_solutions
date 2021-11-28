@@ -1,3 +1,4 @@
+use log::info;
 pub use sln_operations::Sink;
 use sln_operations::{BuildConfig, Config, Operation, Platform, SlnOperations};
 use std::io;
@@ -12,6 +13,7 @@ impl BuildAdapter {
     where
         S: Fn(&str) + Send + 'static,
     {
+        info!("build adapter created for sln '{}'", sln_path);
         Self {
             sln_ops: SlnOperations::from_env(
                 sln_path,
@@ -25,11 +27,13 @@ impl BuildAdapter {
     }
 
     pub fn build(&mut self) -> Result<(), ErrorUiAdapter> {
+        info!("adding stdout sink");
         self.sln_ops.add_stdout_sink(
             self.log_sink
                 .take()
                 .ok_or_else(|| ErrorUiAdapter::Other("log sink is not set.".to_owned()))?,
         );
+        info!("start building. this is blocking");
         self.sln_ops
             .build(Operation::Build)
             .map_err(ErrorUiAdapter::Io)?;

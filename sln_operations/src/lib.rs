@@ -49,6 +49,7 @@ impl SlnOperations {
     }
 
     pub fn interrupter(&mut self) -> Sender<Interrupt> {
+        info!("interrupter added");
         let (tx, rx): (Sender<Interrupt>, Receiver<Interrupt>) = channel();
         self.int_recv = Some(rx);
         tx
