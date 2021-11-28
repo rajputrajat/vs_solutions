@@ -1,5 +1,5 @@
 use druid::{
-    widget::{Button, Controller, Flex, Label},
+    widget::{Button, Controller, Flex, Label, LineBreaking},
     AppLauncher, Data, Event, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
     PlatformError, Selector, Widget, WidgetExt, WidgetId, WindowDesc,
 };
@@ -55,6 +55,7 @@ fn build_ui() -> impl Widget<BuildLog> {
             style: FontStyle::Regular,
         });
         label
+            .with_line_break_mode(LineBreaking::WordWrap)
             .controller(BuildLogController)
             .with_id(ID_ONE)
             .padding(2.0)
@@ -97,8 +98,13 @@ impl BuildLog {
             let l = Arc::clone(&self.log);
             thread::spawn(|| -> Result<(), ErrorUiAdapter> {
                 let mut builder = BuildAdapter::new(
-                "c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln",
-                move |s| { debug!("c: {}", s); l.lock().unwrap().push_str(s); });
+                    "c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln",
+                    move |s| {
+                        debug!("c: {}", s);
+                        let st = format!("{}\n", s);
+                        l.lock().unwrap().push_str(&st);
+                    }
+                );
                 info!("will call blocking 'build'");
                 builder.build()?;
                 Ok(())
