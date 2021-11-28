@@ -1,24 +1,21 @@
 use druid::{
     widget::Label, AppLauncher, Data, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
-    PlatformError, Widget, WindowDesc,
+    PlatformError, Selector, Target, Widget, WindowDesc,
 };
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::sync::{Arc, Mutex};
 use ui_adapter::BuildAdapter;
 
 type Log = Arc<Mutex<Vec<String>>>;
 
 fn main() -> Result<(), PlatformError> {
-    let log = Arc::new(Mutex::new(Vec::<String>::new()));
+    let app_launcher = AppLauncher::with_window(WindowDesc::new(show_build_log()));
+    let ctx = app_launcher.get_external_handle();
     let handle = {
-        let log = Arc::clone(&log);
-        let mut builder = BuildAdapter::new("c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln");
-        thread::spawn(move || builder.build(log).unwrap())
+        let mut builder = BuildAdapter::new("c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln", move |s| {
+            let _res = ctx.submit_command(Selector::new("send logs"), s.to_owned(), Target::Auto);
+        });
     };
-    AppLauncher::with_window(WindowDesc::new(show_build_log(log))).launch(())?;
-    handle.join().unwrap();
+    app_launcher.launch(BuildLog::default())?;
     Ok(())
 }
 
@@ -27,15 +24,16 @@ struct BuildLog {
     log: Arc<Vec<String>>,
 }
 
-impl BuildLog {
-    fn read_latest() {}
+impl Default for BuildLog {
+    fn default() -> Self {
+        Self {
+            log: Arc::new(vec![]),
+        }
+    }
 }
 
-fn show_build_log(log: Log) -> impl Widget<()> {
-    let mut label = Label::dynamic(move |_, _| {
-        let lock = log.lock().unwrap();
-        dbg!(lock.iter().map(|s| s.to_owned()).collect())
-    });
+fn show_build_log() -> impl Widget<BuildLog> {
+    let mut label = Label::new("hi");
     label.set_font(FontDescriptor {
         family: FontFamily::MONOSPACE,
         size: 9.0,
