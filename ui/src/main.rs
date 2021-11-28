@@ -1,6 +1,6 @@
 use druid::{
-    widget::Label, AppLauncher, Data, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
-    PlatformError, Selector, Target, Widget, WindowDesc,
+    widget::Label, AppLauncher, Data, ExtEventSink, FontDescriptor, FontFamily, FontStyle,
+    FontWeight, Lens, PlatformError, Selector, Target, Widget, WindowDesc,
 };
 use log::{debug, info};
 use std::{sync::Arc, thread};
@@ -10,21 +10,7 @@ fn main() -> Result<(), ErrorUi> {
     env_logger::init();
     let app_launcher = AppLauncher::with_window(WindowDesc::new(show_build_log()));
     let ctx = app_launcher.get_external_handle();
-    let _handle = {
-        thread::spawn(|| {
-            let mut builder = BuildAdapter::new(
-                "c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln",
-                move |s| {
-                    debug!("c: {}", s);
-                    let _res = ctx.submit_command(
-                        Selector::new("send logs"),
-                        BuildLog {log: Arc::new(vec![s.to_owned()])},
-                        Target::Auto);
-            });
-            info!("will call blocking 'build'");
-            builder.build().map_err(ErrorUi::Other).unwrap();
-        })
-    };
+    build(ctx).map_err(ErrorUi::UiAdapter)?;
     app_launcher
         .launch(BuildLog::default())
         .map_err(ErrorUi::Platform)?;
@@ -34,7 +20,8 @@ fn main() -> Result<(), ErrorUi> {
 #[derive(Debug)]
 enum ErrorUi {
     Platform(PlatformError),
-    Other(ErrorUiAdapter),
+    UiAdapter(ErrorUiAdapter),
+    Other(String),
 }
 
 #[derive(Clone, Data, Lens)]
@@ -59,4 +46,24 @@ fn show_build_log() -> impl Widget<BuildLog> {
         style: FontStyle::Regular,
     });
     label
+}
+
+fn build(ctx: ExtEventSink) -> Result<(), ErrorUiAdapter> {
+    let _handle = {
+        thread::spawn(|| -> Result<(), ErrorUiAdapter> {
+            let mut builder = BuildAdapter::new(
+                "c:/Users/rajput/R/svn/nAble/UserDevelopment/MonacoNYL/3.01/3.01.000/Runtime/core/Games/BuffaloChief.sln",
+                move |s| {
+                    debug!("c: {}", s);
+                    let _res = ctx.submit_command(
+                        Selector::new("send logs"),
+                        BuildLog {log: Arc::new(vec![s.to_owned()])},
+                        Target::Auto);
+            });
+            info!("will call blocking 'build'");
+            builder.build()?;
+            Ok(())
+        })
+    };
+    Ok(())
 }
