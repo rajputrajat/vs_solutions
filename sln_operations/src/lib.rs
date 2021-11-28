@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, trace};
 use std::{
     io::{self, prelude::*, BufReader},
     process::{Command, ExitStatus, Stdio},
@@ -71,6 +71,7 @@ impl SlnOperations {
             let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
+                    trace!("out: {}", l);
                     let sinks = sinks.lock().unwrap();
                     for sink in &sinks.out {
                         (sink)(&l);
@@ -85,6 +86,7 @@ impl SlnOperations {
             let sinks = Arc::clone(&self.sinks);
             thread::spawn(move || {
                 reader.lines().filter_map(|l| l.ok()).for_each(|l| {
+                    trace!("err: {}", l);
                     let sinks = sinks.lock().unwrap();
                     for sink in &sinks.err {
                         (sink)(&l);
