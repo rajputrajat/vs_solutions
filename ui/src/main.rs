@@ -8,7 +8,10 @@ use ui_adapter::{BuildAdapter, ErrorUiAdapter};
 
 fn main() -> Result<(), ErrorUi> {
     env_logger::init();
-    let app_launcher = AppLauncher::with_window(WindowDesc::new(show_build_log()));
+    let app_launcher = {
+        let window = WindowDesc::new(show_build_log());
+        AppLauncher::with_window(window).log_to_console()
+    };
     let ctx = app_launcher.get_external_handle();
     build(ctx).map_err(ErrorUi::UiAdapter)?;
     app_launcher
