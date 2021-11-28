@@ -1,4 +1,5 @@
 use druid::{
+    scroll_component::ScrollbarsEnabled,
     widget::{Button, Controller, Flex, Label, LineBreaking},
     AppLauncher, Data, Event, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
     PlatformError, Selector, Widget, WidgetExt, WidgetId, WindowDesc,
@@ -45,7 +46,7 @@ const ID_ONE: WidgetId = WidgetId::reserved(1);
 const SHOW_LOG: Selector = Selector::new("show_log");
 
 fn build_ui() -> impl Widget<BuildLog> {
-    let padded_label = {
+    let customized_label = {
         let mut label =
             Label::dynamic(|data: &BuildLog, _| format!("b: {}", data.log.lock().unwrap()));
         label.set_font(FontDescriptor {
@@ -54,12 +55,15 @@ fn build_ui() -> impl Widget<BuildLog> {
             weight: FontWeight::MEDIUM,
             style: FontStyle::Regular,
         });
-        label
+        let padded = label
             .with_line_break_mode(LineBreaking::WordWrap)
             .controller(BuildLogController)
             .with_id(ID_ONE)
-            .padding(2.0)
-            .scroll()
+            .padding(2.0);
+        let mut scrollable = padded.scroll();
+        scrollable.set_vertical_scroll_enabled(true);
+        scrollable.set_horizontal_scroll_enabled(true);
+        scrollable
     };
     Flex::column()
         .with_child(
@@ -67,7 +71,7 @@ fn build_ui() -> impl Widget<BuildLog> {
                 .padding(2.0)
                 .on_click(|ctx, _data, _env| ctx.submit_command(SHOW_LOG)),
         )
-        .with_child(padded_label)
+        .with_child(customized_label)
 }
 
 struct BuildLogController;
