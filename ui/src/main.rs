@@ -1,7 +1,7 @@
 use druid::{
     widget::{Button, Controller, Flex, Label},
-    AppLauncher, Data, Event, ExtEventSink, FontDescriptor, FontFamily, FontStyle, FontWeight,
-    Lens, PlatformError, Selector, Target, Widget, WidgetExt, WidgetId, WindowDesc,
+    AppLauncher, Data, Event, FontDescriptor, FontFamily, FontStyle, FontWeight, Lens,
+    PlatformError, Selector, Widget, WidgetExt, WidgetId, WindowDesc,
 };
 use log::{debug, info};
 use std::{
@@ -16,8 +16,6 @@ fn main() -> Result<(), ErrorUi> {
         let window = WindowDesc::new(build_ui());
         AppLauncher::with_window(window).log_to_console()
     };
-    let ctx = app_launcher.get_external_handle();
-    // build(ctx).map_err(ErrorUi::UiAdapter)?;
     app_launcher
         .launch(BuildLog::default())
         .map_err(ErrorUi::Platform)?;
@@ -27,63 +25,69 @@ fn main() -> Result<(), ErrorUi> {
 #[derive(Debug)]
 enum ErrorUi {
     Platform(PlatformError),
-    UiAdapter(ErrorUiAdapter),
-    Other(String),
+    // UiAdapter(ErrorUiAdapter),
+    // Other(String),
 }
 
 #[derive(Clone, Data, Lens, Default)]
 struct BuildLog {
     log: Arc<Mutex<String>>,
+    build_started: bool,
 }
 
 const ID_ONE: WidgetId = WidgetId::reserved(1);
 const SHOW_LOG: Selector = Selector::new("show_log");
 
 fn build_ui() -> impl Widget<BuildLog> {
+    let padded_label = {
+        let mut label =
+            Label::dynamic(|data: &BuildLog, _| format!("b: {}", data.log.lock().unwrap()));
+        label.set_font(FontDescriptor {
+            family: FontFamily::MONOSPACE,
+            size: 9.0,
+            weight: FontWeight::MEDIUM,
+            style: FontStyle::Regular,
+        });
+        label
+            .controller(BuildLogController)
+            .with_id(ID_ONE)
+            .padding(2.0)
+    };
     Flex::column()
         .with_child(
             Button::new("Build")
                 .padding(2.0)
                 .on_click(|ctx, _data, _env| ctx.submit_command(SHOW_LOG)),
         )
-        .with_child(
-            Label::dynamic(|data, _| format!("b: {}", data.lock().unwrap()))
-                .controller(BuildLogController)
-                .with_id(ID_ONE)
-                .lens(BuildLog::log)
-                .padding(2.0),
-        );
-
-    let mut label = Label::new("hi");
-    label.set_font(FontDescriptor {
-        family: FontFamily::MONOSPACE,
-        size: 9.0,
-        weight: FontWeight::MEDIUM,
-        style: FontStyle::Regular,
-    });
-    label
+        .with_child(padded_label)
 }
 
 struct BuildLogController;
 
-impl Controller<Arc<Mutex<String>>, Label<Arc<Mutex<String>>>> for BuildLogController {
+impl Controller<BuildLog, Label<BuildLog>> for BuildLogController {
     fn event(
         &mut self,
-        child: &mut Label<Arc<Mutex<String>>>,
+        child: &mut Label<BuildLog>,
         ctx: &mut druid::EventCtx,
         event: &druid::Event,
-        data: &mut Arc<Mutex<String>>,
+        data: &mut BuildLog,
         env: &druid::Env,
     ) {
         match event {
-            Event::Command(cmd) if cmd.is(SHOW_LOG) => {}
+            Event::Command(cmd) if cmd.is(SHOW_LOG) => {
+                if data.build_started {
+                } else {
+                    data.build_started = true;
+                    let _res = data.build();
+                }
+            }
             _ => child.event(ctx, event, data, env),
         }
     }
 }
 
 impl BuildLog {
-    fn build(&mut self) -> Result<(), ErrorUiAdapter> {
+    fn build(&self) -> Result<(), ErrorUiAdapter> {
         let _handle = {
             let l = Arc::clone(&self.log);
             thread::spawn(|| -> Result<(), ErrorUiAdapter> {
