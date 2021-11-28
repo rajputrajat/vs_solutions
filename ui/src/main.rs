@@ -7,6 +7,7 @@ use std::{sync::Arc, thread};
 use ui_adapter::{BuildAdapter, ErrorUiAdapter};
 
 fn main() -> Result<(), ErrorUi> {
+    env_logger::init();
     let app_launcher = AppLauncher::with_window(WindowDesc::new(show_build_log()));
     let ctx = app_launcher.get_external_handle();
     let _handle = {
